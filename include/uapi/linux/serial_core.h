@@ -245,4 +245,7 @@
 /* Sunplus UART */
 #define PORT_SUNPLUS	123
 
+/* Xenon XBOX 360 Southbridge */
+#define PORT_XENON	124
+
 #endif /* _UAPILINUX_SERIAL_CORE_H */
