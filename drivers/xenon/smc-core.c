@@ -23,6 +23,7 @@
 #include <linux/init.h>
 #include <linux/interrupt.h>
 #include <linux/mutex.h>
+#include <linux/pci.h>
 
 #define DRV_NAME	"xenon_smc_core"
 #define DRV_VERSION	"0.1"

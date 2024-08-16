@@ -83,12 +83,20 @@ static const struct rtc_class_ops xenon_rtc_ops = {
 
 static int __init xenon_rtc_probe(struct platform_device *pdev)
 {
-	struct rtc_device *rtc = rtc_device_register(DRV_NAME, &pdev->dev,
-				     &xenon_rtc_ops, THIS_MODULE);
+	struct rtc_device *rtc;
+	int ret;
+
+	rtc = devm_rtc_allocate_device(&pdev->dev);
 
 	printk("xenon_rtc_probe(%p) = %p\n", pdev, rtc);
 	if (IS_ERR(rtc))
 		return PTR_ERR(rtc);
+
+	rtc->ops = &xenon_rtc_ops;
+
+	ret = devm_rtc_register_device(rtc);
+	if (ret)
+		return ret;
 
 	platform_set_drvdata(pdev, rtc);
 	return 0;
@@ -96,9 +104,6 @@ static int __init xenon_rtc_probe(struct platform_device *pdev)
 
 static int __exit xenon_rtc_remove(struct platform_device *pdev)
 {
-	struct rtc_device *rtc = platform_get_drvdata(pdev);
-
-	rtc_device_unregister(rtc);
 	return 0;
 }
 

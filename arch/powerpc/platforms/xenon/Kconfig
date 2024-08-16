@@ -4,6 +4,7 @@ config PPC_XENON
 	select PPC_NATIVE
 	select DMA_VIRT_OPS
 	select HAVE_PCI
+	select PPC_HASH_MMU_NATIVE
 	default y
 	help
 	  This option enables support for the Xbox 360 game console

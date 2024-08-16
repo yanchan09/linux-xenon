@@ -55,6 +55,9 @@ static void __init xenon_init_irq(void)
 	xenon_iic_init_IRQ();
 }
 
+/* sda1 */
+#define DEFAULT_ROOT_DEVICE	MKDEV(SCSI_DISK0_MAJOR, 1)
+
 static void __init xenon_setup_arch(void)
 {
 #ifdef CONFIG_SMP
@@ -64,7 +67,7 @@ static void __init xenon_setup_arch(void)
 	loops_per_jiffy = 50000000;
 
 	if (ROOT_DEV == 0)
-		ROOT_DEV = Root_SDA1;
+		ROOT_DEV = DEFAULT_ROOT_DEVICE;
 
 	xenon_pci_init();
 #ifdef CONFIG_DUMMY_CONSOLE

@@ -17,6 +17,9 @@
 #include <linux/types.h>
 #include <linux/ioport.h>
 #include <linux/irqdesc.h>
+#include <linux/irqdomain.h>
+#include <linux/of.h>
+#include <linux/of_address.h>
 
 #ifdef CONFIG_SMP
 #include <linux/smp.h>
@@ -28,6 +31,7 @@
 #include <asm/ptrace.h>
 #include <asm/machdep.h>
 #include <asm/udbg.h>
+#include <asm/smp.h>
 
 #include "interrupt.h"
 
@@ -236,7 +240,7 @@ static unsigned int iic_get_irq(void)
 
 	/* No interrupt. This really shouldn't happen. */
 	if (index == PRIO_NONE) {
-		return NO_IRQ;
+		return 0;
 	}
 
 	return irq_linear_revmap(host, index);
