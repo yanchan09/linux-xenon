@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *  Xenon Memory Probe character driver.
  *
@@ -22,15 +23,15 @@
 #include <linux/init.h>
 #include <linux/miscdevice.h>
 #include <linux/fs.h>
-#include <asm/uaccess.h>
-#include <asm/io.h>
+#include <linux/uaccess.h>
+#include <linux/io.h>
 
-#define DRV_NAME	"xenon_probe"
-#define DRV_VERSION	"0.1"
+#define DRV_NAME "xenon_probe"
+#define DRV_VERSION "0.1"
 
 static unsigned long base = 0xc8000000;
 static unsigned long size = 0x10000;
-static bool little_endian = 0;
+static bool little_endian;
 
 module_param(base, ulong, 0);
 MODULE_PARM_DESC(base, "Probe Memory Base");
@@ -41,25 +42,23 @@ MODULE_PARM_DESC(size, "Probe Memory Size");
 module_param(little_endian, bool, 0);
 MODULE_PARM_DESC(little_endian, "Probe Memory Endianess");
 
-static void __iomem *mapped = NULL;
-
+static void __iomem *mapped;
 
 static uint32_t probe_map(uint32_t val)
 {
 	if (little_endian)
 		return le32_to_cpu(val);
-	else
-		return be32_to_cpu(val);
+
+	return be32_to_cpu(val);
 }
 
 static uint32_t probe_rmap(uint32_t val)
 {
 	if (little_endian)
 		return cpu_to_le32(val);
-	else
-		return cpu_to_be32(val);
-}
 
+	return cpu_to_be32(val);
+}
 
 static loff_t probe_llseek(struct file *file, loff_t offset, int origin)
 {
@@ -71,6 +70,7 @@ static loff_t probe_llseek(struct file *file, loff_t offset, int origin)
 		offset += size;
 		break;
 	}
+
 	if ((offset < 0) || (offset >= size))
 		return -EINVAL;
 
@@ -78,30 +78,31 @@ static loff_t probe_llseek(struct file *file, loff_t offset, int origin)
 	return file->f_pos;
 }
 
-typedef union {
+union probe_mem {
 	uint32_t val;
 	uint8_t p[4];
-} 	probe_mem_t;
+};
 
-static ssize_t probe_read(struct file *file,
-	char __user *buf, size_t count, loff_t *ppos)
+static ssize_t probe_read(struct file *file, char __user *buf, size_t count,
+			  loff_t *ppos)
 {
 	uint32_t ppa = *ppos;
 
 	if (*ppos >= size)
 		return -EINVAL;
 
-	printk("probe_read(%x,%zx)\n", ppa, count);
+	dev_info(probe_dev.this_device, "%s(%x,%zx)\n", __func_, ppa, count);
 	while (count) {
 		/* optimize reads in same longword */
 		unsigned long addr = ppa & ~3;
 		int shift = ppa % 4;
-		probe_mem_t r = { .val = probe_map(readl(mapped + addr)) };
+		union probe_mem r = { .val = probe_map(readl(mapped + addr)) };
 
 		int len = 4 - shift;
 
 		if (len > count)
 			len = count;
+
 		if (copy_to_user(buf, &r.p[shift], len))
 			return -EFAULT;
 
@@ -120,20 +121,20 @@ static ssize_t probe_read(struct file *file,
 	return count;
 }
 
-static ssize_t probe_write(struct file *file,
-	const char __user *buf, size_t count, loff_t *ppos)
+static ssize_t probe_write(struct file *file, const char __user *buf,
+			   size_t count, loff_t *ppos)
 {
 	uint32_t ppa = *ppos;
 
 	if (*ppos >= size)
 		return -EINVAL;
 
-	printk("probe_write(%x,%zx)\n", ppa, count);
+	dev_info(probe_dev.this_device, "%s(%x,%zx)\n", __func_, ppa, count);
 	while (count) {
 		/* coalesce writes to same reg */
 		unsigned long addr = ppa & ~3;
 		int shift = ppa % 4;
-		probe_mem_t r;
+		union probe_mem r;
 
 		int len = 4 - shift;
 
@@ -164,8 +165,7 @@ static ssize_t probe_write(struct file *file,
 	return count;
 }
 
-static long probe_ioctl(struct file *file,
-	unsigned int cmd, unsigned long arg)
+static long probe_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	return -ENODEV;
 }
@@ -180,35 +180,33 @@ static int probe_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-
 const struct file_operations probe_fops = {
-	.owner		= THIS_MODULE,
-	.llseek		= probe_llseek,
-	.read		= probe_read,
-	.write		= probe_write,
-	.unlocked_ioctl	= probe_ioctl,
-	.open		= probe_open,
-	.release	= probe_release,
+	.owner = THIS_MODULE,
+	.llseek = probe_llseek,
+	.read = probe_read,
+	.write = probe_write,
+	.unlocked_ioctl = probe_ioctl,
+	.open = probe_open,
+	.release = probe_release,
 };
 
-static struct miscdevice probe_dev = {
-	.minor =  MISC_DYNAMIC_MINOR,
-	"probe",
-	&probe_fops
-};
+static struct miscdevice probe_dev = { .minor = MISC_DYNAMIC_MINOR,
+				       "probe",
+				       &probe_fops };
 
 int __init probe_init(void)
 {
-	int ret = 0;
+	int ret;
 
-	printk(KERN_INFO "Xenon Memory Probe driver version " DRV_VERSION "\n");
+	dev_info(probe_dev.this_device,
+		 "Xenon Memory Probe driver version %s\n", DRV_VERSION);
 
 	mapped = ioremap(base, size);
 	if (!mapped)
 		return -EINVAL;
 
-	printk(KERN_INFO "XMP mapped 0x%04lx bytes @0x%08lx\n",
-		size, base);
+	dev_info(probe_dev.this_device, "XMP mapped 0x%04lx bytes @0x%08lx\n",
+		 size, base);
 
 	ret = misc_register(&probe_dev);
 	return ret;
@@ -226,4 +224,3 @@ MODULE_AUTHOR("Herbert Poetzl <herbert@13thfloor.at>");
 MODULE_DESCRIPTION("Xenon Memory Probe Interface");
 MODULE_LICENSE("GPL");
 MODULE_VERSION(DRV_VERSION);
-

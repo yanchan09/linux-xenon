@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *  Xenon SMC character driver.
  *
@@ -24,20 +25,20 @@
 #include <linux/fs.h>
 #include <linux/uaccess.h>
 
-#define DRV_NAME	"xenon_smc"
-#define DRV_VERSION	"0.2"
-
+#define DRV_NAME "xenon_smc"
+#define DRV_VERSION "0.2"
 
 /* single access for now */
 
 static unsigned long is_active;
 static unsigned char msg[16];
 
-static ssize_t smc_read(struct file *file, char __user *buf,
-	size_t count, loff_t *ppos)
+static ssize_t smc_read(struct file *file, char __user *buf, size_t count,
+			loff_t *ppos)
 {
 	if ((count != 16) || *ppos)
 		return -EINVAL;
+
 	if (copy_to_user(buf, msg, 0x10))
 		return -EFAULT;
 
@@ -47,7 +48,7 @@ static ssize_t smc_read(struct file *file, char __user *buf,
 int xenon_smc_message_wait(void *msg);
 
 static ssize_t smc_write(struct file *file, const char __user *buf,
-	size_t count, loff_t *ppos)
+			 size_t count, loff_t *ppos)
 {
 	if ((count != 16) || *ppos)
 		return -EINVAL;
@@ -60,8 +61,7 @@ static ssize_t smc_write(struct file *file, const char __user *buf,
 	return 16;
 }
 
-static long smc_ioctl(struct file *file,
-	unsigned int cmd, unsigned long arg)
+static long smc_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	return -ENODEV;
 }
@@ -80,28 +80,26 @@ static int smc_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-
 const struct file_operations smc_fops = {
-	.owner		= THIS_MODULE,
-	.llseek		= no_llseek,
-	.read		= smc_read,
-	.write		= smc_write,
-	.unlocked_ioctl	= smc_ioctl,
-	.open		= smc_open,
-	.release	= smc_release,
+	.owner = THIS_MODULE,
+	.llseek = no_llseek,
+	.read = smc_read,
+	.write = smc_write,
+	.unlocked_ioctl = smc_ioctl,
+	.open = smc_open,
+	.release = smc_release,
 };
 
-static struct miscdevice smc_dev = {
-	.minor =  MISC_DYNAMIC_MINOR,
-	"smc",
-	&smc_fops
-};
+static struct miscdevice smc_dev = { .minor = MISC_DYNAMIC_MINOR,
+				     "smc",
+				     &smc_fops };
 
 int __init smc_init(void)
 {
-	int ret = 0;
+	int ret;
 
-	printk(KERN_INFO "Xenon SMC char driver version " DRV_VERSION "\n");
+	dev_info(smc_dev.this_device, "Xenon SMC char driver version %s\n",
+		 DRV_VERSION);
 
 	ret = misc_register(&smc_dev);
 	return ret;
@@ -119,4 +117,3 @@ MODULE_AUTHOR("Herbert Poetzl <herbert@13thfloor.at>");
 MODULE_DESCRIPTION("Character Interface for Xenon Southbridge SMC");
 MODULE_LICENSE("GPL");
 MODULE_VERSION(DRV_VERSION);
-
