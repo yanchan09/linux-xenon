@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * SMP support for Xenon machines.
  *
@@ -17,6 +18,7 @@
 #include <asm/smp.h>
 #include <asm/udbg.h>
 
+#include "smp.h"
 #include "interrupt.h"
 
 #define DEBUG
@@ -26,8 +28,6 @@
 #define DBG pr_debug
 #endif
 
-extern int boot_cpuid;
-
 static void __init smp_xenon_probe(void)
 {
 	xenon_request_IPIs();
@@ -35,20 +35,23 @@ static void __init smp_xenon_probe(void)
 
 static void smp_xenon_setup_cpu(int cpu)
 {
-	/* Boot CPU IRQs are already initialized at this point in
-	 * xenon_iic_init_IRQ */
+	/*
+	 * Boot CPU IRQs are already initialized at this point in
+	 * xenon_iic_init_IRQ
+	 */
 	if (cpu != boot_cpuid)
 		xenon_init_irq_on_cpu(cpu);
 }
 
 static int smp_xenon_cpu_bootable(unsigned int nr)
 {
-	/* Special case - we inhibit secondary thread startup
+	/*
+	 * Special case - we inhibit secondary thread startup
 	 * during boot if the user requests it.  Odd-numbered
 	 * cpus are assumed to be secondary threads.
 	 */
-	if (system_state < SYSTEM_RUNNING && cpu_has_feature(CPU_FTR_SMT)
-	    && !smt_enabled_at_boot && nr % 2 != 0)
+	if (system_state < SYSTEM_RUNNING && cpu_has_feature(CPU_FTR_SMT) &&
+	    !smt_enabled_at_boot && nr % 2 != 0)
 		return 0;
 
 	return 1;
@@ -73,9 +76,5 @@ static struct smp_ops_t xenon_smp_ops = {
 /* This is called very early */
 void __init smp_init_xenon(void)
 {
-	pr_debug(" -> smp_init_xenon()\n");
-
 	smp_ops = &xenon_smp_ops;
-
-	pr_debug(" <- smp_init_xenon()\n");
 }
