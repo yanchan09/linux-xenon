@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *  Xenon HW Monitor via SMC driver.
  *
@@ -24,21 +25,14 @@
 #include <linux/hwmon.h>
 #include <linux/hwmon-sysfs.h>
 
-#define DRV_NAME	"xenon-hwmon"
-#define DRV_VERSION	"0.1"
+#include "xenon-hwmon.h"
 
-#if 0
-struct hwmon {
-	spinlock_t	lock;
+#define DRV_NAME "xenon-hwmon"
+#define DRV_VERSION "0.1"
 
-	struct device	*xenon_hwmon_dev;
-};
-#endif
 static unsigned int fan_speed[2];
 
-int xenon_smc_message_wait(void *msg);
-
-static unsigned long xenon_get_temp(unsigned nr)
+static unsigned long xenon_get_temp(unsigned int nr)
 {
 	unsigned char msg[16] = { 0x07 };
 	static unsigned int temp[4] = { 0 };
@@ -55,7 +49,7 @@ static unsigned long xenon_get_temp(unsigned nr)
 
 void xenon_smc_message(void *msg);
 
-static int xenon_set_cpu_fan_speed(unsigned val)
+static int xenon_set_cpu_fan_speed(unsigned int val)
 {
 	unsigned char msg[16] = { 0x94, (val & 0x7F) | 0x80 };
 
@@ -63,7 +57,7 @@ static int xenon_set_cpu_fan_speed(unsigned val)
 	return 0;
 }
 
-static int xenon_set_gpu_fan_speed(unsigned val)
+static int xenon_set_gpu_fan_speed(unsigned int val)
 {
 	unsigned char msg[16] = { 0x89, (val & 0x7F) | 0x80 };
 
@@ -71,11 +65,10 @@ static int xenon_set_gpu_fan_speed(unsigned val)
 	return 0;
 }
 
-
-static ssize_t show_fan_speed(struct device *dev, struct device_attribute *attr, char *buf)
+static ssize_t show_fan_speed(struct device *dev, struct device_attribute *attr,
+			      char *buf)
 {
 	int fan_nr = to_sensor_dev_attr(attr)->index;
-	// void *p = dev_get_drvdata(dev);
 
 	return sprintf(buf, "%u\n", fan_speed[fan_nr]);
 }
@@ -83,45 +76,53 @@ static ssize_t show_fan_speed(struct device *dev, struct device_attribute *attr,
 static ssize_t set_fan_speed(struct device *dev, struct device_attribute *attr,
 			     const char *buf, size_t count)
 {
-	int fan_nr = to_sensor_dev_attr(attr)->index;
-	unsigned int val = simple_strtol(buf, NULL, 10);
-	// void *p = dev_get_drvdata(dev);
+	int ret;
+	long val_buf;
+	unsigned int val;
 
+	int fan_nr = to_sensor_dev_attr(attr)->index;
+
+	ret = kstrtol(buf, 10, &val_buf);
+	if (ret)
+		return ret;
+
+	val = val_buf;
 	fan_speed[fan_nr] = val & 0xFF;
 
 	if (fan_nr == 0)
 		xenon_set_cpu_fan_speed(val);
-	if (fan_nr == 1)
+	else if (fan_nr == 1)
 		xenon_set_gpu_fan_speed(val);
 
 	return count;
 }
 
-static SENSOR_DEVICE_ATTR(cpu_fan_speed, S_IRUGO | S_IWUSR,
-		show_fan_speed, set_fan_speed, 0);
-static SENSOR_DEVICE_ATTR(gpu_fan_speed, S_IRUGO | S_IWUSR,
-		show_fan_speed, set_fan_speed, 1);
+static SENSOR_DEVICE_ATTR(cpu_fan_speed, 0644, show_fan_speed, set_fan_speed,
+			  0);
+static SENSOR_DEVICE_ATTR(gpu_fan_speed, 0644, show_fan_speed, set_fan_speed,
+			  1);
 
-static ssize_t show_temp(struct device *dev, struct device_attribute *attr, char *buf)
+static ssize_t show_temp(struct device *dev, struct device_attribute *attr,
+			 char *buf)
 {
 	int temp_nr = to_sensor_dev_attr(attr)->index;
-	// struct dev *p = dev_get_drvdata(pdev);
-	unsigned temp = xenon_get_temp(temp_nr);
+	unsigned int temp = xenon_get_temp(temp_nr);
 
 	return sprintf(buf, "%d\n", temp);
 }
 
-static SENSOR_DEVICE_ATTR(cpu_temp, S_IRUGO, show_temp, NULL, 0);
-static SENSOR_DEVICE_ATTR(gpu_temp, S_IRUGO, show_temp, NULL, 1);
-static SENSOR_DEVICE_ATTR(edram_temp, S_IRUGO, show_temp, NULL, 2);
-static SENSOR_DEVICE_ATTR(motherboard_temp, S_IRUGO, show_temp, NULL, 3);
+static SENSOR_DEVICE_ATTR(cpu_temp, 0444, show_temp, NULL, 0);
+static SENSOR_DEVICE_ATTR(gpu_temp, 0444, show_temp, NULL, 1);
+static SENSOR_DEVICE_ATTR(edram_temp, 0444, show_temp, NULL, 2);
+static SENSOR_DEVICE_ATTR(motherboard_temp, 0444, show_temp, NULL, 3);
 
-static ssize_t show_name(struct device *dev, struct device_attribute *attr, char *buf)
+static ssize_t show_name(struct device *dev, struct device_attribute *attr,
+			 char *buf)
 {
 	return sprintf(buf, "xenon\n");
 }
 
-static SENSOR_DEVICE_ATTR(name, S_IRUGO, show_name, NULL, 0);
+static SENSOR_DEVICE_ATTR(name, 0444, show_name, NULL, 0);
 
 static struct attribute *xenon_hwmon_attributes[] = {
 	&sensor_dev_attr_cpu_fan_speed.dev_attr.attr,
@@ -141,25 +142,26 @@ static const struct attribute_group xenon_hwmon_group = {
 static int __init xenon_hwmon_probe(struct platform_device *pdev)
 {
 	struct device *dev;
-	int err;
+	int ret;
 
-	err = sysfs_create_group(&pdev->dev.kobj, &xenon_hwmon_group);
-	if (err)
+	ret = sysfs_create_group(&pdev->dev.kobj, &xenon_hwmon_group);
+	if (ret)
 		goto out;
 
 	dev = hwmon_device_register(&pdev->dev);
 	if (IS_ERR(dev)) {
-		err = PTR_ERR(dev);
+		ret = PTR_ERR(dev);
 		goto out_sysfs_remove_group;
 	}
 
 	platform_set_drvdata(pdev, dev);
+
 	return 0;
 
 out_sysfs_remove_group:
 	sysfs_remove_group(&pdev->dev.kobj, &xenon_hwmon_group);
 out:
-	return err;
+	return ret;
 }
 
 static int __exit xenon_hwmon_remove(struct platform_device *pdev)
@@ -168,7 +170,6 @@ static int __exit xenon_hwmon_remove(struct platform_device *pdev)
 	sysfs_remove_group(&pdev->dev.kobj, &xenon_hwmon_group);
 	return 0;
 }
-
 
 static struct platform_driver xenon_hwmon_driver = {
 	.driver		= {
@@ -182,7 +183,6 @@ static int __init xenon_hwmon_init(void)
 {
 	int ret = platform_driver_probe(&xenon_hwmon_driver, xenon_hwmon_probe);
 
-	printk("xenon_hwmon_init() = %d\n", ret);
 	return ret;
 }
 

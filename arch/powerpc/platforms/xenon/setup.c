@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  *  linux/arch/powerpc/platforms/xenon/xenon_setup.c
  *
@@ -25,18 +26,11 @@
 #include "interrupt.h"
 #include "pci.h"
 #include "smp.h"
+#include "setup.h"
 
 #ifdef CONFIG_PPC_EARLY_DEBUG_XENON
 void udbg_init_xenon_virtual(void);
 #endif
-
-static int xenon_early_init(void)
-{
-	// xenon_smc_early_led(0x01, 0x60);
-	printk("%s\n", __func__);
-	return 0;
-}
-machine_early_initcall(xenon, xenon_early_init);
 
 static void xenon_show_cpuinfo(struct seq_file *m)
 {
@@ -46,6 +40,7 @@ static void xenon_show_cpuinfo(struct seq_file *m)
 	root = of_find_node_by_path("/");
 	if (root)
 		model = of_get_property(root, "model", NULL);
+
 	seq_printf(m, "machine\t\t: %s\n", model);
 	of_node_put(root);
 }
@@ -56,14 +51,14 @@ static void __init xenon_init_irq(void)
 }
 
 /* sda1 */
-#define DEFAULT_ROOT_DEVICE	MKDEV(SCSI_DISK0_MAJOR, 1)
+#define DEFAULT_ROOT_DEVICE MKDEV(SCSI_DISK0_MAJOR, 1)
 
 static void __init xenon_setup_arch(void)
 {
 #ifdef CONFIG_SMP
 	smp_init_xenon();
 #endif
-		/* init to some ~sane value until calibrate_delay() runs */
+	/* init to some ~sane value until calibrate_delay() runs */
 	loops_per_jiffy = 50000000;
 
 	if (ROOT_DEV == 0)
@@ -76,66 +71,65 @@ static void __init xenon_setup_arch(void)
 }
 
 int xenon_smc_message(void *msg);
-void xenon_smc_restart(void);
 
 static void xenon_panic(char *str)
 {
 	// show a red ring
-	unsigned char msg[16] = {0x99, 0x01, 0x0F, 0};
-	xenon_smc_message(msg);
+	unsigned char msg[16] = { 0x99, 0x01, 0x0F, 0 };
 
+	xenon_smc_message(msg);
 	smp_send_stop();
-	printk("\n");
-	printk("   System does not reboot automatically.\n");
-	printk("   Please press POWER button.\n");
-	printk("\n");
+	pr_emerg("\nSystem does not reboot automatically.\nPlease press POWER button.\n\n");
 
 	local_irq_disable();
-	while (1);
+	while (1)
+		;
 }
 
 static void __noreturn xenon_restart(char *cmd)
 {
-	printk("   System restart ... \n");
+	pr_info("System restart...\n");
 
 	smp_send_stop();
 	xenon_smc_restart();
 
 	local_irq_disable();
-	while (1);
+	while (1)
+		;
 }
 
 void xenon_smc_power_off(void);
 
 static void xenon_power_off(void)
 {
-	printk("   System power off ... \n");
+	pr_info("System power off...\n");
 
 	smp_send_stop();
 	xenon_smc_power_off();
 
 	local_irq_disable();
-	while (1);
+	while (1)
+		;
 }
 
 void xenon_smc_halt(void);
 
 static void __noreturn xenon_halt(void)
 {
-	printk("   System halt ... \n");
+	pr_info("System halt...\n");
 
 	smp_send_stop();
 	xenon_smc_halt();
 
 	local_irq_disable();
-	while (1);
+	while (1)
+		;
 }
 
 static int __init xenon_probe(void)
 {
-	if (!of_machine_is_compatible("XENON")) {
+	if (!of_machine_is_compatible("XENON"))
 		return 0;
-	}
 
 #ifdef CONFIG_PPC_EARLY_DEBUG_XENON
 	udbg_init_xenon_virtual();
@@ -147,27 +141,14 @@ static int __init xenon_probe(void)
 	return 1;
 }
 
-#if 0
-static int xenon_check_legacy_ioport(unsigned int baseport)
-{
-	return -ENODEV;
-}
-#endif
-
 define_machine(xenon) {
-	.name			= "Xenon",
-	.probe			= xenon_probe,
-	.setup_arch		= xenon_setup_arch,
-	.show_cpuinfo	= xenon_show_cpuinfo,
-	.calibrate_decr	= generic_calibrate_decr,
-	.init_IRQ       = xenon_init_irq,
-	.panic			= xenon_panic,
-	.restart		= xenon_restart,
-	.halt			= xenon_halt,
-#if 0 && defined(CONFIG_KEXEC)
-	.machine_kexec		= default_machine_kexec,
-	.machine_kexec_prepare	= default_machine_kexec_prepare,
-	.machine_crash_shutdown	= default_machine_crash_shutdown,
-#endif
+	.name = "Xenon",
+	.probe = xenon_probe,
+	.setup_arch = xenon_setup_arch,
+	.show_cpuinfo = xenon_show_cpuinfo,
+	.calibrate_decr = generic_calibrate_decr,
+	.init_IRQ = xenon_init_irq,
+	.panic = xenon_panic,
+	.restart = xenon_restart,
+	.halt = xenon_halt,
 };
-

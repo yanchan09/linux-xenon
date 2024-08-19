@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Xenon interrupt controller,
  *
@@ -44,35 +45,35 @@
 
 static void *iic_base, // 00050000
 	*bridge_base, // ea000000
-	*biu,         // e1000000
-	*graphics;    // ec800000
+	*biu, // e1000000
+	*graphics; // ec800000
 static struct irq_domain *host;
 
 #define XENON_NR_IRQS 128
 
-#define PRIO_IPI_4       0x08
-#define PRIO_IPI_3       0x10
-#define PRIO_SMM         0x14
-#define PRIO_SFCX        0x18
-#define PRIO_SATA_HDD    0x20
-#define PRIO_SATA_CDROM  0x24
-#define PRIO_OHCI_0      0x2C
-#define PRIO_EHCI_0      0x30
-#define PRIO_OHCI_1      0x34
-#define PRIO_EHCI_1      0x38
-#define PRIO_XMA         0x40
-#define PRIO_AUDIO       0x44
-#define PRIO_ENET        0x4C
-#define PRIO_XPS         0x54
-#define PRIO_GRAPHICS    0x58
-#define PRIO_PROFILER    0x60
-#define PRIO_BIU         0x64
-#define PRIO_IOC         0x68
-#define PRIO_FSB         0x6C
-#define PRIO_IPI_2       0x70
-#define PRIO_CLOCK       0x74
-#define PRIO_IPI_1       0x78
-#define PRIO_NONE		 0x7C
+#define PRIO_IPI_4 0x08
+#define PRIO_IPI_3 0x10
+#define PRIO_SMM 0x14
+#define PRIO_SFCX 0x18
+#define PRIO_SATA_HDD 0x20
+#define PRIO_SATA_CDROM 0x24
+#define PRIO_OHCI_0 0x2C
+#define PRIO_EHCI_0 0x30
+#define PRIO_OHCI_1 0x34
+#define PRIO_EHCI_1 0x38
+#define PRIO_XMA 0x40
+#define PRIO_AUDIO 0x44
+#define PRIO_ENET 0x4C
+#define PRIO_XPS 0x54
+#define PRIO_GRAPHICS 0x58
+#define PRIO_PROFILER 0x60
+#define PRIO_BIU 0x64
+#define PRIO_IOC 0x68
+#define PRIO_FSB 0x6C
+#define PRIO_IPI_2 0x70
+#define PRIO_CLOCK 0x74
+#define PRIO_IPI_1 0x78
+#define PRIO_NONE 0x7C
 
 /*
  * Important interrupt registers (per CPU):
@@ -135,12 +136,11 @@ static void disconnect_pci_irq(int prio)
 {
 	int i;
 
-	printk(KERN_INFO "xenon IIC: disconnect irq 0x%.2X\n", prio);
+	pr_info("xenon IIC: disconnect irq 0x%.2X\n", prio);
 
 	i = xenon_pci_irq_map[prio >> 2];
-	if (i != -1) {
+	if (i != -1)
 		writel(0, bridge_base + 0x10 + i * 4);
-	}
 }
 
 /* connects a PCI IRQ to a CPU */
@@ -148,7 +148,7 @@ static void connect_pci_irq(int prio, int target_cpu)
 {
 	uint8_t i;
 
-	printk(KERN_INFO "xenon IIC: connect irq 0x%.2X\n", prio);
+	pr_info("xenon IIC: connect irq 0x%.2X\n", prio);
 
 	i = xenon_pci_irq_map[prio >> 2];
 	if (i != -1) {
@@ -161,6 +161,7 @@ static void connect_pci_irq(int prio, int target_cpu)
 		 * 0x0000007F = CPU IRQ
 		 */
 		uint32_t bits = 0x00800080;
+
 		bits |= ((1 << target_cpu) & 0xFF) << 8;
 		bits |= (prio >> 2) & 0x3F;
 
@@ -182,6 +183,7 @@ static void xenon_ipi_send_mask(struct irq_data *data,
 				const struct cpumask *dest)
 {
 	int cpu = hard_smp_processor_id();
+
 	out_be64(iic_base + cpu * 0x1000 + 0x10,
 		 ((cpumask_bits(dest)[0] << 16) & 0x3F) | (data->hwirq & 0x7C));
 }
@@ -196,7 +198,7 @@ static struct irq_chip xenon_pic = {
 
 void xenon_init_irq_on_cpu(int cpu)
 {
-	printk(KERN_INFO "xenon IIC: init on cpu %i\n", cpu);
+	pr_info("xenon IIC: init on cpu %i\n", cpu);
 
 	/* init that cpu's interrupt controller */
 	out_be64(iic_base + cpu * 0x1000 + 0x70, 0x7C);
@@ -204,8 +206,10 @@ void xenon_init_irq_on_cpu(int cpu)
 	out_be64(iic_base + cpu * 0x1000, 1 << cpu); /* "who am i" */
 
 	/* read in and ack all outstanding interrupts */
-	while (in_be64(iic_base + cpu * 0x1000 + 0x50) != PRIO_NONE);
-	out_be64(iic_base + cpu * 0x1000 + 0x68, 0); /* EOI and set priority to 0 */
+	while (in_be64(iic_base + cpu * 0x1000 + 0x50) != PRIO_NONE)
+		;
+	out_be64(iic_base + cpu * 0x1000 + 0x68,
+		 0); /* EOI and set priority to 0 */
 }
 
 /* Get an IRQ number from the pending state register of the IIC */
@@ -221,11 +225,13 @@ static unsigned int iic_get_irq(void)
 	index = in_be64(my_iic_base + 0x50) & 0x7C;
 	out_be64(my_iic_base + 0x60, 0x0); /* EOI this interrupt. */
 
-	/* HACK: we will handle some (otherwise unhandled) interrupts here
-	   to prevent them flooding. */
+	/*
+	 * HACK: we will handle some (otherwise unhandled) interrupts here to prevent
+	 * them flooding.
+	 */
 	switch (index) {
 	case PRIO_GRAPHICS:
-		writel(0, graphics + 0xed0);  // RBBM_INT_CNTL
+		writel(0, graphics + 0xed0); // RBBM_INT_CNTL
 		writel(0, graphics + 0x6540); // R500_DxMODE_INT_MASK
 		break;
 	case PRIO_IOC:
@@ -239,15 +245,14 @@ static unsigned int iic_get_irq(void)
 	}
 
 	/* No interrupt. This really shouldn't happen. */
-	if (index == PRIO_NONE) {
+	if (index == PRIO_NONE)
 		return 0;
-	}
 
 	return irq_linear_revmap(host, index);
 }
 
 static int xenon_irq_host_map(struct irq_domain *h, unsigned int virq,
-				irq_hw_number_t hw)
+			      irq_hw_number_t hw)
 {
 	irq_set_chip_and_handler(virq, &xenon_pic, handle_percpu_irq);
 	return 0;
@@ -266,29 +271,29 @@ static const struct irq_domain_ops xenon_irq_host_ops = {
 
 void __init xenon_iic_init_IRQ(void)
 {
-	int i;
 	struct device_node *dn;
 	struct resource res;
 
-	printk(KERN_DEBUG "xenon IIC: init\n");
-			/* search for our interrupt controller inside the device tree */
+	pr_debug("xenon IIC: init\n");
+
+	/* search for our interrupt controller inside the device tree */
 	for (dn = NULL;
 	     (dn = of_find_node_by_name(dn, "interrupt-controller")) != NULL;) {
 		if (!of_device_is_compatible(dn, "xenon"))
 			continue;
 
-		if (of_address_to_resource(dn, 0, &res))
-		{
-			printk(KERN_WARNING "xenon IIC: Can't resolve addresses\n");
+		if (of_address_to_resource(dn, 0, &res)) {
+			pr_warn("xenon IIC: Can't resolve addresses\n");
 			of_node_put(dn);
 			return;
 		}
 
 		iic_base = ioremap(res.start, 0x10000);
 
-		host = irq_domain_add_linear(NULL, XENON_NR_IRQS, &xenon_irq_host_ops, NULL);
+		host = irq_domain_add_linear(NULL, XENON_NR_IRQS,
+					     &xenon_irq_host_ops, NULL);
 		host->host_data = of_node_get(dn);
-		BUG_ON(host == NULL);
+		BUG_ON(!host);
 		irq_set_default_host(host);
 	}
 
@@ -298,18 +303,19 @@ void __init xenon_iic_init_IRQ(void)
 	biu = ioremap(0xe1000000, 0x2000000);
 	graphics = ioremap(0xec800000, 0x10000);
 
-		/* initialize interrupts */
+	/* initialize interrupts */
 	writel(0, bridge_base);
 	writel(0x40000000, bridge_base + 4);
 
 	writel(0x40000000, biu + 0x40074);
 	writel(0xea000050, biu + 0x40078);
 
-	writel(0, bridge_base + 0xc);  /* Interrupt mask register */
+	/* Interrupt mask register */
+	writel(0, bridge_base + 0xc);
 	writel(0x3, bridge_base);
 
-		/* disconnect all PCI IRQs until they are requested */
-	for (i=0; i<0x10; ++i)
+	/* disconnect all PCI IRQs until they are requested */
+	for (int i = 0; i < 0x10; ++i)
 		writel(0, bridge_base + 0x10 + i * 4);
 
 	xenon_init_irq_on_cpu(0);
@@ -322,20 +328,17 @@ static int ipi_to_prio(int ipi)
 	switch (ipi) {
 	case PPC_MSG_NMI_IPI:
 		return PRIO_IPI_1;
-		break;
 	case PPC_MSG_CALL_FUNCTION:
 		return PRIO_IPI_2;
-		break;
 	case PPC_MSG_RESCHEDULE:
 		return PRIO_IPI_3;
-		break;
 	case PPC_MSG_TICK_BROADCAST:
 		return PRIO_IPI_4;
-		break;
 	default:
-		printk("unhandled ipi %d\n", ipi);
+		pr_err("unhandled ipi %d\n", ipi);
 		BUG();
 	}
+
 	return 0;
 }
 
@@ -345,7 +348,8 @@ void xenon_cause_IPI(int target_cpu, int msg)
 	int cpu = hard_smp_processor_id();
 
 	ipi_prio = ipi_to_prio(msg);
-	out_be64(iic_base + cpu * 0x1000 + 0x10, (0x10000 << target_cpu) | ipi_prio);
+	out_be64(iic_base + cpu * 0x1000 + 0x10,
+		 (0x10000 << target_cpu) | ipi_prio);
 }
 
 static void xenon_request_ipi(int ipi)
@@ -355,8 +359,9 @@ static void xenon_request_ipi(int ipi)
 
 	virq = irq_create_mapping(host, prio);
 	if (virq == NO_IRQ) {
-		printk(KERN_ERR "xenon_request_ipi: failed to map IPI%d (%s)\n",
-		       prio, smp_ipi_name[ipi]);
+		pr_err("%s: failed to map IPI%d (%s)\n", __func__, prio,
+		       smp_ipi_name[ipi]);
+
 		return;
 	}
 
@@ -373,4 +378,3 @@ void xenon_request_IPIs(void)
 }
 
 #endif
-

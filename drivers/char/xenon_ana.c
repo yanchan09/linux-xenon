@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *  Xenon (H)ana via SMC character driver.
  *
@@ -24,16 +25,15 @@
 #include <linux/fs.h>
 #include <linux/uaccess.h>
 
-#define DRV_NAME	"xenon_ana"
-#define DRV_VERSION	"0.2"
+#include "xenon_smc.h"
 
-
-int xenon_smc_message_wait(void *msg);
+#define DRV_NAME "xenon_ana"
+#define DRV_VERSION "0.2"
 
 static uint32_t ana_read_reg(uint8_t addr)
 {
-	unsigned char msg[16] = { 0x11,
-		0x10, 0x05, 0x80 | 0x70, 0x00, 0xF0, addr };
+	unsigned char msg[16] = { 0x11, 0x10, 0x05, 0x80 | 0x70,
+				  0x00, 0xF0, addr };
 
 	xenon_smc_message_wait(msg);
 	return msg[4] | (msg[5] << 8) | (msg[6] << 16) | (msg[7] << 24);
@@ -42,9 +42,17 @@ static uint32_t ana_read_reg(uint8_t addr)
 static int ana_write_reg(uint8_t addr, uint32_t val)
 {
 	unsigned char msg[16] = { 0x11,
-		0x60, 0x00, 0x80 | 0x70, 0x00, 0x00,
-		addr, 0x00, val & 0xFF, (val >> 8) & 0xFF,
-		(val >> 16) & 0xFF, (val >> 24) & 0xFF };
+				  0x60,
+				  0x00,
+				  0x80 | 0x70,
+				  0x00,
+				  0x00,
+				  addr,
+				  0x00,
+				  val & 0xFF,
+				  (val >> 8) & 0xFF,
+				  (val >> 16) & 0xFF,
+				  (val >> 24) & 0xFF };
 
 	xenon_smc_message_wait(msg);
 	return msg[1];
@@ -60,6 +68,7 @@ static loff_t ana_llseek(struct file *file, loff_t offset, int origin)
 		offset += 0x400;
 		break;
 	}
+
 	if (offset < 0)
 		return -EINVAL;
 
@@ -67,13 +76,13 @@ static loff_t ana_llseek(struct file *file, loff_t offset, int origin)
 	return file->f_pos;
 }
 
-typedef union {
+union ana_reg {
 	uint32_t val;
 	uint8_t p[4];
-} 	ana_reg_t;
+};
 
-static ssize_t ana_read(struct file *file, char __user *buf,
-	size_t count, loff_t *ppos)
+static ssize_t ana_read(struct file *file, char __user *buf, size_t count,
+			loff_t *ppos)
 {
 	uint32_t ppa = *ppos;
 
@@ -82,14 +91,15 @@ static ssize_t ana_read(struct file *file, char __user *buf,
 
 	while (count) {
 		/* optimize reads in same reg */
-		int addr = ppa/4;
+		int addr = ppa / 4;
 		int shift = ppa % 4;
-		ana_reg_t r = { .val = ana_read_reg(addr) };
+		union ana_reg r = { .val = ana_read_reg(addr) };
 
 		int len = 4 - shift;
 
 		if (len > count)
 			len = count;
+
 		if (copy_to_user(buf, &r.p[shift], len))
 			return -EFAULT;
 
@@ -109,7 +119,7 @@ static ssize_t ana_read(struct file *file, char __user *buf,
 }
 
 static ssize_t ana_write(struct file *file, const char __user *buf,
-	size_t count, loff_t *ppos)
+			 size_t count, loff_t *ppos)
 {
 	uint32_t ppa = *ppos;
 
@@ -118,9 +128,9 @@ static ssize_t ana_write(struct file *file, const char __user *buf,
 
 	while (count) {
 		/* coalesce writes to same reg */
-		int addr = ppa/4;
+		int addr = ppa / 4;
 		int shift = ppa % 4;
-		ana_reg_t r;
+		union ana_reg r;
 
 		int len = 4 - shift;
 
@@ -152,8 +162,7 @@ static ssize_t ana_write(struct file *file, const char __user *buf,
 	return count;
 }
 
-static long ana_ioctl(struct file *file,
-	unsigned int cmd, unsigned long arg)
+static long ana_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	return -ENODEV;
 }
@@ -168,30 +177,29 @@ static int ana_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-
 const struct file_operations ana_fops = {
-	.owner		= THIS_MODULE,
-	.llseek		= ana_llseek,
-	.read		= ana_read,
-	.write		= ana_write,
-	.unlocked_ioctl	= ana_ioctl,
-	.open		= ana_open,
-	.release	= ana_release,
+	.owner = THIS_MODULE,
+	.llseek = ana_llseek,
+	.read = ana_read,
+	.write = ana_write,
+	.unlocked_ioctl = ana_ioctl,
+	.open = ana_open,
+	.release = ana_release,
 };
 
-static struct miscdevice ana_dev = {
-	.minor =  MISC_DYNAMIC_MINOR,
-	"ana",
-	&ana_fops
-};
+static struct miscdevice ana_dev = { .minor = MISC_DYNAMIC_MINOR,
+				     "ana",
+				     &ana_fops };
 
 int __init ana_init(void)
 {
 	int ret = 0;
 
-	printk(KERN_INFO "Xenon (H)ana char driver version " DRV_VERSION "\n");
-
 	ret = misc_register(&ana_dev);
+
+	dev_info(ana_dev.this_device, "Xenon (H)ana char driver version%s\n",
+		 DRV_VERSION);
+
 	return ret;
 }
 
@@ -207,4 +215,3 @@ MODULE_AUTHOR("Herbert Poetzl <herbert@13thfloor.at>");
 MODULE_DESCRIPTION("Character Interface for Xenon (H)ana");
 MODULE_LICENSE("GPL");
 MODULE_VERSION(DRV_VERSION);
-

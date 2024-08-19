@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *  Xenon hardware related routines.
  *
@@ -34,4 +35,3 @@ static int __init xenon_hwmon_init(void)
 }
 
 module_init(xenon_hwmon_init);
-
